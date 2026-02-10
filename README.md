@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" alt="WalkingPad JS Logo" width="400">
+  <img src="docs/logo.webp" alt="WalkingPad JS Logo" width="150">
 </p>
 
 # WalkingPad JS 🏃‍♂️
