@@ -1,0 +1,67 @@
+{
+  "name": "walkingpad-js",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "TypeScript library to control WalkingPad treadmills over Web Bluetooth",
+  "keywords": [
+    "walkingpad",
+    "treadmill",
+    "bluetooth",
+    "web-bluetooth",
+    "ble",
+    "ftms",
+    "fitness"
+  ],
+  "license": "CC-BY-NC-SA-4.0",
+  "author": "Mwea",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mwea/walkingpad-js.git"
+  },
+  "homepage": "https://github.com/Mwea/walkingpad-js#readme",
+  "bugs": {
+    "url": "https://github.com/Mwea/walkingpad-js/issues"
+  },
+  "scripts": {
+    "build": "npm run build:types && npm run build:esm && npm run build:iife",
+    "build:types": "tsc --emitDeclarationOnly",
+    "build:esm": "esbuild src/index.ts --bundle --format=esm --outfile=dist/walkingpad-js.js --target=es2022 --sourcemap",
+    "build:iife": "esbuild src/index.ts --bundle --format=iife --global-name=WalkingPadJS --outfile=dist/walkingpad-js.iife.js --target=es2022 --sourcemap",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src/",
+    "lint:fix": "biome check --write src/",
+    "format": "biome format --write src/",
+    "demo": "npm run build && npx serve -l 3000",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "main": "./dist/walkingpad-js.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/walkingpad-js.js",
+      "default": "./dist/walkingpad-js.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.14",
+    "@types/node": "^22.0.0",
+    "@types/web-bluetooth": "^0.0.21",
+    "esbuild": "^0.27.0",
+    "fast-check": "^4.5.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.0"
+  }
+}

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WalkingPad JS - Web Bluetooth Demo</title>
+  <meta name="description" content="Control your WalkingPad treadmill from your browser using Web Bluetooth">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚶</text></svg>">
+  <style>
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 12px;
+      --shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border: #334155;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      color: var(--text-muted);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    /* Connection Status */
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+    }
+
+    .status-dot.connecting {
+      background: var(--warning);
+    }
+
+    .status-dot.error {
+      background: var(--danger);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-text {
+      flex: 1;
+      font-weight: 500;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-dark);
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Speed Control */
+    .speed-control {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .speed-display {
+      text-align: center;
+      padding: 24px;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+
+    .speed-value {
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .speed-unit {
+      font-size: 1rem;
+      color: var(--text-muted);
+    }
+
+    .speed-slider {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      background: var(--border);
+      appearance: none;
+      outline: none;
+    }
+
+    .speed-slider::-webkit-slider-thumb {
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+
+    .speed-slider::-moz-range-thumb {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--primary);
+      cursor: pointer;
+      border: none;
+      box-shadow: var(--shadow);
+    }
+
+    .speed-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Log */
+    .log {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 0.75rem;
+    }
+
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: var(--text-muted);
+      margin-right: 8px;
+    }
+
+    .log-error {
+      color: var(--danger);
+    }
+
+    .log-success {
+      color: var(--success);
+    }
+
+    /* Browser Support Warning */
+    .warning {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      padding: 16px;
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .warning.show {
+      display: block;
+    }
+
+    .warning a {
+      color: inherit;
+      font-weight: 600;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+
+    footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Animations */
+    .fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .quick-btn {
+      padding: 8px 16px;
+      font-size: 0.875rem;
+      border-radius: 20px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-btn:hover:not(:disabled) {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .quick-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="logo.png" alt="WalkingPad BLE Logo" style="max-width: 300px; margin-bottom: 16px;">
+      <h1>🚶 WalkingPad JS</h1>
+      <p>Control your treadmill from your browser</p>
+    </header>
+
+    <div class="warning" id="browserWarning">
+      <strong>⚠️ Web Bluetooth not supported</strong>
+      <p>Your browser doesn't support Web Bluetooth. Please use Chrome, Edge, or Opera.</p>
+      <p><a href="#bluetooth-setup">Learn how to enable Web Bluetooth →</a></p>
+    </div>
+
+    <!-- Connection Card -->
+    <div class="card">
+      <div class="card-title">Connection</div>
+
+      <div class="status-indicator">
+        <div class="status-dot" id="statusDot"></div>
+        <span class="status-text" id="statusText">Disconnected</span>
+      </div>
+
+      <div class="btn-group">
+        <button class="btn btn-primary" id="connectBtn">
+          🔌 Connect
+        </button>
+        <button class="btn btn-outline" id="disconnectBtn" disabled>
+          ✕ Disconnect
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Card -->
+    <div class="card" id="statsCard" style="display: none;">
+      <div class="card-title">Live Stats</div>
+
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value" id="speedStat">0.0</div>
+          <div class="stat-label">Speed (km/h)</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="distanceStat">0.00</div>
+          <div class="stat-label">Distance (km)</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="timeStat">00:00</div>
+          <div class="stat-label">Time</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value" id="stepsStat">0</div>
+          <div class="stat-label">Steps</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Card -->
+    <div class="card" id="controlsCard" style="display: none;">
+      <div class="card-title">Controls</div>
+
+      <div class="btn-group" style="margin-bottom: 24px;">
+        <button class="btn btn-success" id="startBtn">
+          ▶️ Start
+        </button>
+        <button class="btn btn-danger" id="stopBtn">
+          ⏹️ Stop
+        </button>
+      </div>
+
+      <div class="speed-control">
+        <div class="speed-display">
+          <span class="speed-value" id="speedValue">3.0</span>
+          <span class="speed-unit">km/h</span>
+        </div>
+
+        <input
+          type="range"
+          class="speed-slider"
+          id="speedSlider"
+          min="0.5"
+          max="6.0"
+          step="0.1"
+          value="3.0"
+        >
+
+        <div class="speed-labels">
+          <span>0.5</span>
+          <span>3.0</span>
+          <span>6.0</span>
+        </div>
+
+        <div class="quick-actions">
+          <button class="quick-btn" data-speed="1.0">1.0</button>
+          <button class="quick-btn" data-speed="2.0">2.0</button>
+          <button class="quick-btn" data-speed="3.0">3.0</button>
+          <button class="quick-btn" data-speed="4.0">4.0</button>
+          <button class="quick-btn" data-speed="5.0">5.0</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Card -->
+    <div class="card">
+      <div class="card-title">Activity Log</div>
+      <div class="log" id="log">
+        <div class="log-entry">
+          <span class="log-time">--:--:--</span>
+          <span>Waiting for connection...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Setup Guide -->
+    <div class="card" id="bluetooth-setup">
+      <div class="card-title">🔧 Bluetooth Setup</div>
+
+      <details>
+        <summary style="cursor: pointer; font-weight: 500; margin-bottom: 12px;">
+          Click to expand setup instructions
+        </summary>
+
+        <div style="font-size: 0.875rem; color: var(--text-muted);">
+          <h4 style="color: var(--text); margin: 16px 0 8px;">Chrome (Recommended)</h4>
+          <p>Web Bluetooth works out of the box. Just ensure you're on HTTPS or localhost.</p>
+
+          <h4 style="color: var(--text); margin: 16px 0 8px;">Chrome on Linux</h4>
+          <ol style="padding-left: 20px;">
+            <li>Open <code>chrome://flags</code></li>
+            <li>Search for "Experimental Web Platform features"</li>
+            <li>Set to <strong>Enabled</strong></li>
+            <li>Relaunch Chrome</li>
+          </ol>
+          <p style="margin-top: 8px;">You may also need to add your user to the bluetooth group:</p>
+          <code style="display: block; background: var(--bg); padding: 8px; border-radius: 4px; margin-top: 8px;">
+            sudo usermod -a -G bluetooth $USER
+          </code>
+
+          <h4 style="color: var(--text); margin: 16px 0 8px;">Firefox (Experimental)</h4>
+          <ol style="padding-left: 20px;">
+            <li>Open <code>about:config</code></li>
+            <li>Search for <code>dom.webbluetooth.enabled</code></li>
+            <li>Set to <strong>true</strong></li>
+            <li>Restart Firefox</li>
+          </ol>
+
+          <h4 style="color: var(--text); margin: 16px 0 8px;">Android</h4>
+          <p>Enable Bluetooth and Location services. Grant permission when prompted.</p>
+        </div>
+      </details>
+    </div>
+
+    <footer>
+      <p>
+        <a href="https://github.com/Mwea/walkingpad-js">GitHub</a> •
+        <a href="https://www.npmjs.com/package/walkingpad-js">npm</a> •
+        Made with ❤️ by <a href="https://github.com/Mwea">Mwea</a> & <a href="https://claude.ai">Claude</a>
+      </p>
+    </footer>
+  </div>
+
+  <!-- Load the library (local build for GitHub Pages, fallback to unpkg) -->
+  <script src="walkingpad-js.iife.js"></script>
+  <script>
+    if (typeof WalkingPadJS === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/walkingpad-js/dist/walkingpad-js.iife.js';
+      document.head.appendChild(script);
+    }
+  </script>
+
+  <script>
+    // Wait for library to load
+    function init() {
+      const { getWalkingPadBLE } = window.WalkingPadJS || {};
+      const WalkingPadBLE = getWalkingPadBLE ? getWalkingPadBLE() : null;
+
+      if (!WalkingPadBLE) {
+        log('Library not loaded. Please build the project first.', 'error');
+        return;
+      }
+
+      // Check Web Bluetooth support
+      if (!navigator.bluetooth) {
+        document.getElementById('browserWarning').classList.add('show');
+        document.getElementById('connectBtn').disabled = true;
+        log('Web Bluetooth not supported in this browser', 'error');
+        return;
+      }
+
+      // DOM Elements
+      const connectBtn = document.getElementById('connectBtn');
+      const disconnectBtn = document.getElementById('disconnectBtn');
+      const startBtn = document.getElementById('startBtn');
+      const stopBtn = document.getElementById('stopBtn');
+      const speedSlider = document.getElementById('speedSlider');
+      const speedValue = document.getElementById('speedValue');
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      const statsCard = document.getElementById('statsCard');
+      const controlsCard = document.getElementById('controlsCard');
+
+      // Stats elements
+      const speedStat = document.getElementById('speedStat');
+      const distanceStat = document.getElementById('distanceStat');
+      const timeStat = document.getElementById('timeStat');
+      const stepsStat = document.getElementById('stepsStat');
+
+      // Quick action buttons
+      const quickBtns = document.querySelectorAll('.quick-btn[data-speed]');
+
+      // State
+      let isConnected = false;
+
+      // Logging
+      function log(message, type = 'info') {
+        const logEl = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : ''}`;
+        entry.innerHTML = `<span class="log-time">${time}</span><span>${message}</span>`;
+        logEl.insertBefore(entry, logEl.firstChild);
+
+        // Keep log size manageable
+        while (logEl.children.length > 50) {
+          logEl.removeChild(logEl.lastChild);
+        }
+      }
+
+      // Update UI based on connection state
+      function updateUI(state) {
+        statusDot.className = 'status-dot ' + state;
+        statusText.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+
+        isConnected = state === 'connected';
+        connectBtn.disabled = isConnected || state === 'connecting';
+        disconnectBtn.disabled = !isConnected;
+        startBtn.disabled = !isConnected;
+        stopBtn.disabled = !isConnected;
+        speedSlider.disabled = !isConnected;
+        quickBtns.forEach(btn => btn.disabled = !isConnected);
+
+        statsCard.style.display = isConnected ? 'block' : 'none';
+        controlsCard.style.display = isConnected ? 'block' : 'none';
+
+        if (isConnected) {
+          statsCard.classList.add('fade-in');
+          controlsCard.classList.add('fade-in');
+        }
+      }
+
+      // Format time as MM:SS
+      function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      }
+
+      // Subscribe to state changes
+      WalkingPadBLE.events.on('state', (state) => {
+        speedStat.textContent = state.speed.toFixed(1);
+        distanceStat.textContent = state.distance.toFixed(2);
+        timeStat.textContent = formatTime(state.time);
+        stepsStat.textContent = state.steps.toLocaleString();
+      });
+
+      // Subscribe to errors
+      WalkingPadBLE.events.on('error', (error) => {
+        log(`Error: ${error.message}`, 'error');
+      });
+
+      // Connect button
+      connectBtn.addEventListener('click', async () => {
+        try {
+          updateUI('connecting');
+          log('Connecting to WalkingPad...');
+          await WalkingPadBLE.connect({ rememberDevice: true });
+          updateUI('connected');
+          log('Connected successfully!', 'success');
+        } catch (error) {
+          updateUI('disconnected');
+          log(`Connection failed: ${error.message}`, 'error');
+        }
+      });
+
+      // Disconnect button
+      disconnectBtn.addEventListener('click', async () => {
+        try {
+          await WalkingPadBLE.disconnect();
+          updateUI('disconnected');
+          log('Disconnected');
+        } catch (error) {
+          log(`Disconnect error: ${error.message}`, 'error');
+        }
+      });
+
+      // Start button
+      startBtn.addEventListener('click', async () => {
+        try {
+          await WalkingPadBLE.start();
+          log('Started treadmill', 'success');
+        } catch (error) {
+          log(`Start error: ${error.message}`, 'error');
+        }
+      });
+
+      // Stop button
+      stopBtn.addEventListener('click', async () => {
+        try {
+          await WalkingPadBLE.stop();
+          log('Stopped treadmill', 'success');
+        } catch (error) {
+          log(`Stop error: ${error.message}`, 'error');
+        }
+      });
+
+      // Speed slider
+      speedSlider.addEventListener('input', (e) => {
+        speedValue.textContent = parseFloat(e.target.value).toFixed(1);
+      });
+
+      speedSlider.addEventListener('change', async (e) => {
+        const speed = parseFloat(e.target.value);
+        try {
+          await WalkingPadBLE.setSpeed(speed);
+          log(`Speed set to ${speed.toFixed(1)} km/h`);
+        } catch (error) {
+          log(`Speed error: ${error.message}`, 'error');
+        }
+      });
+
+      // Quick action buttons
+      quickBtns.forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const speed = parseFloat(btn.dataset.speed);
+          speedSlider.value = speed;
+          speedValue.textContent = speed.toFixed(1);
+          try {
+            await WalkingPadBLE.setSpeed(speed);
+            log(`Speed set to ${speed.toFixed(1)} km/h`);
+          } catch (error) {
+            log(`Speed error: ${error.message}`, 'error');
+          }
+        });
+      });
+
+      // Try to reconnect on page load
+      log('Ready! Click Connect to pair your WalkingPad.');
+      (async () => {
+        try {
+          log('Attempting to reconnect to previous device...');
+          const success = await WalkingPadBLE.reconnect();
+          if (success) {
+            updateUI('connected');
+            log('Reconnected to previous device!', 'success');
+          } else {
+            log('No previous device found.');
+          }
+        } catch (error) {
+          // Error already emitted via events.on('error'), just log status
+          log('Reconnect failed. Make sure your WalkingPad is powered on.');
+        }
+      })();
+    }
+
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => setTimeout(init, 100));
+    } else {
+      setTimeout(init, 100);
+    }
+  </script>
+</body>
+</html>
