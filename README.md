@@ -7,8 +7,9 @@
 [![npm version](https://img.shields.io/npm/v/walkingpad-js.svg)](https://www.npmjs.com/package/walkingpad-js)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org/)
+[![Demo](https://img.shields.io/badge/Demo-Live-success.svg)](https://mwea.github.io/walkingpad-js)
 
-> A TypeScript library to control WalkingPad treadmills via Web Bluetooth API
+> A TypeScript library to control WalkingPad treadmills via Web Bluetooth API | [**Try the Demo**](https://mwea.github.io/walkingpad-js)
 
 Control your WalkingPad treadmill directly from your browser! This library provides a clean, type-safe API to connect, monitor, and control WalkingPad devices using the Web Bluetooth standard.
 
