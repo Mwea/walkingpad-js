@@ -46,7 +46,7 @@ describe('normalizeError', () => {
 
   it('handles circular objects gracefully', () => {
     const obj: Record<string, unknown> = { a: 1 };
-    obj.self = obj;
+    obj['self'] = obj;
     const result = normalizeError(obj);
     expect(result).toBeInstanceOf(Error);
     expect(result.message).toBe('[object Object]');

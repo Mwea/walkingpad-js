@@ -541,13 +541,6 @@
 
   <!-- Load the library (local build for GitHub Pages, fallback to unpkg) -->
   <script src="walkingpad-js.iife.js"></script>
-  <script>
-    if (typeof WalkingPadJS === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/walkingpad-js/dist/walkingpad-js.iife.js';
-      document.head.appendChild(script);
-    }
-  </script>
 
   <script>
     // Wait for library to load

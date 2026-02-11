@@ -60,7 +60,26 @@ export function createMockCharacteristic(
       return currentValue;
     },
 
+    async readValue(): Promise<DataView> {
+      return currentValue ?? new DataView(new ArrayBuffer(0));
+    },
+
     async writeValueWithResponse(
+      value: ArrayBuffer | Uint8Array | DataView,
+    ): Promise<void> {
+      const delay = dynamicWriteDelay;
+      if (typeof delay === 'number' && delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else if (delay instanceof Promise) {
+        await delay;
+      }
+      if (writeShouldFail) {
+        throw writeFailError;
+      }
+      writtenValues.push(value);
+    },
+
+    async writeValueWithoutResponse(
       value: ArrayBuffer | Uint8Array | DataView,
     ): Promise<void> {
       const delay = dynamicWriteDelay;
@@ -88,6 +107,14 @@ export function createMockCharacteristic(
 
     async stopNotifications(): Promise<void> {
       stopNotificationsCalled = true;
+    },
+
+    async getDescriptor(_uuid: BluetoothDescriptorUUID): Promise<never> {
+      throw new Error('Descriptor not found');
+    },
+
+    async getDescriptors(_uuid?: BluetoothDescriptorUUID): Promise<never[]> {
+      return [];
     },
 
     addEventListener(
@@ -162,6 +189,15 @@ export function createMockService(
     async getCharacteristics(): Promise<BLEGATTCharacteristic[]> {
       return characteristics;
     },
+    async getCharacteristic(
+      charUuid: BluetoothCharacteristicUUID,
+    ): Promise<BLEGATTCharacteristic> {
+      const found = characteristics.find((c) => c.uuid === charUuid);
+      if (!found) {
+        throw new Error(`Characteristic ${charUuid} not found`);
+      }
+      return found;
+    },
   };
 }
 
@@ -169,6 +205,8 @@ export interface MockSessionOptions {
   services?: BLEGATTService[];
   disconnectShouldFail?: boolean;
   disconnectFailError?: Error;
+  deviceId?: string;
+  deviceName?: string;
 }
 
 export interface MockConnectedSession extends BLEConnectedSession {
@@ -182,13 +220,28 @@ export function createMockConnectedSession(
     services = [],
     disconnectShouldFail = false,
     disconnectFailError = new Error('Disconnect failed'),
+    deviceId = 'mock-device-id',
+    deviceName = 'Mock Device',
   } = options;
 
   let disconnectCalled = false;
 
   return {
+    deviceId,
+    deviceName,
+
     async getPrimaryServices(): Promise<BLEGATTService[]> {
       return services;
+    },
+
+    async getPrimaryService(
+      uuid: BluetoothServiceUUID,
+    ): Promise<BLEGATTService> {
+      const found = services.find((s) => s.uuid === uuid);
+      if (!found) {
+        throw new Error(`Service ${uuid} not found`);
+      }
+      return found;
     },
 
     async disconnect(): Promise<void> {

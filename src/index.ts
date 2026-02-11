@@ -20,9 +20,9 @@
  *
  * @example Custom Adapter
  * ```typescript
- * import { createManager, createWebBluetoothAdapter } from 'walkingpad-ble';
+ * import { createManager, createWalkingPadAdapter } from 'walkingpad-ble';
  *
- * const adapter = createWebBluetoothAdapter();
+ * const adapter = createWalkingPadAdapter({ connectionTimeoutMs: 30000 });
  * const manager = createManager(adapter);
  * await manager.connect();
  * ```
@@ -31,14 +31,40 @@
 import {
   createWebBluetoothAdapter,
   type WebBluetoothAdapterOptions,
-} from './adapter/web-bluetooth';
+} from 'web-ble-kit';
+import {
+  DEFAULT_NAME_PREFIXES,
+  GATT_FTMS_SERVICE,
+  GATT_STANDARD_SERVICE_FE00,
+  GATT_STANDARD_SERVICE_FFF0,
+  toFullUuid,
+} from './constants';
 import { resetLogger } from './logger';
 import { createManager, type WalkingPadBLEManager } from './manager';
-import { resetDefaultStorage } from './storage';
 
 // Lazy singleton - only created when first accessed
 // This avoids throwing in environments without Web Bluetooth (Node.js, SSR)
 let defaultInstance: WalkingPadBLEManager | null = null;
+
+/**
+ * Creates a pre-configured Bluetooth adapter for WalkingPad devices.
+ *
+ * @param options - Optional adapter configuration (timeouts, storage, etc.)
+ * @returns A configured BLE adapter for WalkingPad devices
+ */
+export function createWalkingPadAdapter(
+  options: WebBluetoothAdapterOptions = {},
+) {
+  return createWebBluetoothAdapter({
+    namePrefixes: DEFAULT_NAME_PREFIXES,
+    optionalServices: [
+      toFullUuid(GATT_FTMS_SERVICE),
+      toFullUuid(GATT_STANDARD_SERVICE_FE00),
+      toFullUuid(GATT_STANDARD_SERVICE_FFF0),
+    ],
+    ...options,
+  });
+}
 
 /**
  * Gets the default WalkingPadBLE singleton instance.
@@ -55,7 +81,7 @@ let defaultInstance: WalkingPadBLEManager | null = null;
  */
 export function getWalkingPadBLE(): WalkingPadBLEManager {
   if (!defaultInstance) {
-    defaultInstance = createManager(createWebBluetoothAdapter());
+    defaultInstance = createManager(createWalkingPadAdapter());
   }
   return defaultInstance;
 }
@@ -96,23 +122,15 @@ export { ConnectionAbortedError } from './manager';
  *
  * @example Custom timeouts
  * ```typescript
- * const adapter = createWebBluetoothAdapter({ connectionTimeoutMs: 30000 });
+ * const adapter = createWalkingPadAdapter({ connectionTimeoutMs: 30000 });
  * const manager = createManager(adapter, { writeTimeoutMs: 5000 });
  * ```
  */
 export { createManager };
 export type { CreateManagerOptions } from './manager';
 
-/**
- * Creates a Web Bluetooth adapter with custom configuration.
- *
- * @example Disable device persistence
- * ```typescript
- * const adapter = createWebBluetoothAdapter({ storage: createNoOpStorage() });
- * ```
- */
-export { createWebBluetoothAdapter };
-export type { WebBluetoothAdapterOptions };
+/** Options for configuring the WalkingPad Bluetooth adapter */
+export type { WebBluetoothAdapterOptions as AdapterOptions } from 'web-ble-kit';
 
 // ============================================================================
 // CONFIGURATION - For custom logging and storage
@@ -122,14 +140,15 @@ export type { WebBluetoothAdapterOptions };
 export type { Logger } from './logger';
 export { enableDebugLogging, resetLogger, setLogger } from './logger';
 
-/** Custom storage for device ID persistence */
-export type { DeviceStorage } from './storage';
+/** Storage interface for persisting device info (used for auto-reconnect) */
+export type { DeviceStorage } from 'web-ble-kit';
+/** Storage factory functions */
 export {
   createLocalStorage,
   createMemoryStorage,
   createNoOpStorage,
   createSessionStorage,
-} from './storage';
+} from 'web-ble-kit';
 
 /**
  * Rate limiting utilities for high-frequency UI interactions.
@@ -146,7 +165,7 @@ export {
 
 /**
  * Resets all singleton state. **For testing only.**
- * Clears the default manager instance, resets the logger, and clears default storage.
+ * Clears the default manager instance and resets the logger.
  * This allows tests to run in isolation without state pollution.
  *
  * @example
@@ -159,5 +178,4 @@ export {
 export function resetForTesting(): void {
   defaultInstance = null;
   resetLogger();
-  resetDefaultStorage();
 }

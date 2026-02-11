@@ -220,12 +220,12 @@ describe('clampSteps', () => {
 
 describe('WalkingPadState invariants', () => {
   const stateArb: fc.Arbitrary<WalkingPadState> = fc.record({
-    state: fc.integer({ min: 0, max: 255 }),
+    state: fc.constantFrom(0, 1, 2, 3).map(clampDeviceState),
     speed: fc.double({ min: 0, max: 20 }),
     time: fc.integer({ min: 0, max: 86400 }),
     distance: fc.double({ min: 0, max: 100 }),
     steps: fc.integer({ min: 0, max: 100000 }),
-    mode: fc.integer({ min: 0, max: 255 }),
+    mode: fc.constantFrom(0, 1, 2).map(clampDeviceMode),
     isRunning: fc.boolean(),
   });
 

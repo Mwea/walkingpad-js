@@ -29,3 +29,4 @@ coverage/
 
 # TypeScript cache
 *.tsbuildinfo
+/docs/walkingpad-js.iife.js

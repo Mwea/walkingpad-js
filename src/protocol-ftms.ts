@@ -1,4 +1,4 @@
-import { readUint16LE, readUint24LE } from './buffer-utils';
+import { readUint16LE, readUint24LE } from 'web-ble-kit';
 import {
   FTMS_DEFAULT_MAX_SPEED_KMH,
   FTMS_DEFAULT_MIN_SPEED_KMH,

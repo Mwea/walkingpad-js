@@ -1,4 +1,10 @@
 import {
+  type StartNotificationsOptions as BleStartNotificationsOptions,
+  startNotifications as bleStartNotifications,
+  uuidMatches,
+  writeWithTimeout as bleWriteWithTimeout,
+} from 'web-ble-kit';
+import {
   BLE_NOTIFICATION_TIMEOUT_MS,
   BLE_WRITE_TIMEOUT_MS,
   GATT_FTMS_CONTROL_POINT,
@@ -11,38 +17,13 @@ import {
   GATT_STANDARD_WRITE_FE01,
   GATT_STANDARD_WRITE_FFF2,
 } from './constants';
-import { withTimeout } from './errors';
-import { getLogger, type Logger } from './logger';
+import type { Logger } from './logger';
 import type {
   BLEConnectedSession,
   BLEGATTCharacteristic,
   BLEGATTService,
   TransportSession,
 } from './types';
-
-/**
- * Checks if a UUID matches a short UUID identifier.
- * Handles both short (4 hex chars) and full (128-bit) Bluetooth Base UUIDs.
- * Full UUID format: 0000XXXX-0000-1000-8000-00805f9b34fb where XXXX is the short ID.
- */
-function uuidMatches(uuid: string, shortId: string): boolean {
-  const normalized = uuid.toLowerCase();
-  const shortNormalized = shortId.toLowerCase();
-
-  // Direct match for short UUIDs
-  if (normalized === shortNormalized) {
-    return true;
-  }
-
-  // For full UUIDs, the short ID must appear at position 4-8 (after '0000')
-  // Format: 0000XXXX-0000-1000-8000-00805f9b34fb
-  if (normalized.length === 36 && normalized.charAt(8) === '-') {
-    const extractedShortId = normalized.substring(4, 8);
-    return extractedShortId === shortNormalized;
-  }
-
-  return false;
-}
 
 export async function discoverWalkingPad(
   session: BLEConnectedSession,
@@ -116,58 +97,6 @@ export async function discoverWalkingPad(
 }
 
 /**
- * Safely extracts an ArrayBuffer from a DataView.
- * Returns a copy to handle potential detached buffer issues.
- * If the buffer is detached or inaccessible, returns null.
- */
-export function extractArrayBuffer(
-  value: DataView | undefined,
-): ArrayBuffer | null {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    // Access byteLength first - this will throw if buffer is detached
-    const byteLength = value.byteLength;
-
-    // Empty views are valid but useless for our purposes
-    if (byteLength === 0) {
-      return null;
-    }
-
-    // Verify buffer is accessible by checking its byteLength
-    // A detached buffer will throw when accessing properties
-    const bufferLength = value.buffer.byteLength;
-
-    // Sanity check: view's byte range must fit within buffer
-    if (value.byteOffset + byteLength > bufferLength) {
-      // Invalid state - buffer may have been transferred
-      return null;
-    }
-
-    // Create a copy of the relevant portion of the buffer
-    // This handles DataViews with offset and avoids detached buffer issues
-    const copy = new Uint8Array(byteLength);
-    const source = new Uint8Array(value.buffer, value.byteOffset, byteLength);
-    copy.set(source);
-    return copy.buffer;
-  } catch {
-    // Buffer is detached or otherwise inaccessible
-    // This catch handles TypeError thrown when accessing detached buffer properties
-    return null;
-  }
-}
-
-/**
- * Gets the byte length of a buffer-like object.
- * All buffer-like types (ArrayBuffer, Uint8Array, DataView) share the byteLength property.
- */
-function getByteLength(data: ArrayBuffer | Uint8Array | DataView): number {
-  return data.byteLength;
-}
-
-/**
  * Writes data to a characteristic with a timeout.
  * BLE writes can hang indefinitely, so all user-facing write operations
  * should use this to prevent the app from becoming unresponsive.
@@ -178,12 +107,7 @@ export async function writeWithTimeout(
   data: ArrayBuffer | Uint8Array | DataView,
   timeoutMs: number = BLE_WRITE_TIMEOUT_MS,
 ): Promise<void> {
-  if (getByteLength(data) === 0) {
-    throw new Error(
-      'Empty data: cannot write zero bytes to BLE characteristic',
-    );
-  }
-  await withTimeout(char.writeValueWithResponse(data), timeoutMs, 'BLE write');
+  await bleWriteWithTimeout(char, data, { timeoutMs });
 }
 
 /**
@@ -242,31 +166,11 @@ export async function startNotifications(
   // Support legacy signature: startNotifications(char, onData, timeoutMs)
   const opts = typeof options === 'number' ? { timeoutMs: options } : options;
   const timeoutMs = opts.timeoutMs ?? BLE_NOTIFICATION_TIMEOUT_MS;
-  const logger = opts.logger ?? getLogger();
 
-  const listener = (ev: Event): void => {
-    const ch = ev.target as unknown as BLEGATTCharacteristic;
-    const ab = extractArrayBuffer(ch.value);
-    if (ab) {
-      onData(ab);
-    }
-  };
-
-  await withTimeout(
-    char.startNotifications(),
+  const bleOptions: BleStartNotificationsOptions = {
     timeoutMs,
-    'BLE notification setup',
-  );
-
-  char.addEventListener('characteristicvaluechanged', listener);
-
-  return () => {
-    char.removeEventListener('characteristicvaluechanged', listener);
-    char.stopNotifications().catch((e: unknown) => {
-      logger.warn(
-        '[WalkingPadBLE] Error stopping notifications:',
-        e instanceof Error ? e.message : String(e),
-      );
-    });
+    logPrefix: '[WalkingPadBLE]',
   };
+
+  return bleStartNotifications(char, onData, bleOptions);
 }

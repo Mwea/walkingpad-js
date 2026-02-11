@@ -135,7 +135,7 @@ describe('createManager', () => {
     it('handles abort and promise settlement race condition correctly', async () => {
       // This test verifies that when abort and promise settle "simultaneously",
       // only one resolution path is taken (not both)
-      const { adapter, session } = createStandardMocks();
+      const { adapter } = createStandardMocks();
       const abortController = new AbortController();
       let settleCount = 0;
 
@@ -443,7 +443,7 @@ describe('createManager', () => {
       notifyChar.simulateNotification(new ArrayBuffer(16));
 
       // Wait for microtask to complete (error logging is async)
-      await new Promise((resolve) => queueMicrotask(resolve));
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
 
       expect(secondCallbackInvoked).toBe(true);
     });
@@ -627,8 +627,8 @@ describe('createManager', () => {
       // Track write order
       const writeOrder: string[] = [];
       const originalWriteValueWithResponse = writeChar.writeValueWithResponse;
-      writeChar.writeValueWithResponse = async (value: BufferSource) => {
-        const bytes = new Uint8Array(value as ArrayBuffer);
+      writeChar.writeValueWithResponse = async (value: ArrayBuffer) => {
+        const bytes = new Uint8Array(value);
         writeOrder.push(bytes[2] === 0x04 ? 'start/stop' : 'setSpeed');
         return originalWriteValueWithResponse.call(writeChar, value);
       };
@@ -643,7 +643,7 @@ describe('createManager', () => {
 
   describe('cleanup', () => {
     it('clears polling timer on disconnect', async () => {
-      const { adapter, notifyChar } = createStandardMocks();
+      const { adapter } = createStandardMocks();
       const manager = createManager(adapter);
 
       await manager.connect();
@@ -655,11 +655,6 @@ describe('createManager', () => {
 
       // After disconnect, polling should be stopped
       // No more writes should occur
-      const _writeCountBefore =
-        (
-          notifyChar as unknown as { getWrittenValues(): unknown[] }
-        ).getWrittenValues?.()?.length ?? 0;
-
       await vi.advanceTimersByTimeAsync(6000);
 
       // This is a bit tricky to test - we're mainly checking it doesn't throw

@@ -1,4 +1,4 @@
-import { readByte, readUint24BE } from './buffer-utils';
+import { readByte, readUint24BE } from 'web-ble-kit';
 import {
   STANDARD_CMD_ASK_STATS_BODY,
   STANDARD_CMD_SET_SPEED_OP,

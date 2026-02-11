@@ -18,7 +18,6 @@ This document provides detailed API reference, types, and advanced configuration
 - [Advanced Configuration](#%EF%B8%8F-advanced-configuration)
   - [Custom Timeouts](#-custom-timeouts)
   - [Custom Device Storage](#-custom-device-storage)
-  - [Custom Device Name Prefixes](#-custom-device-name-prefixes)
   - [Custom Logging](#-custom-logging)
   - [Per-Manager Logger](#-per-manager-logger)
 - [Architecture](#-architecture)
@@ -183,9 +182,9 @@ For advanced use cases, create a custom manager instead of using the default sin
 Configure BLE operation timeouts for slow or unreliable connections:
 
 ```typescript
-import { createManager, createWebBluetoothAdapter } from 'walkingpad-js';
+import { createManager, createWalkingPadAdapter } from 'walkingpad-js';
 
-const adapter = createWebBluetoothAdapter({
+const adapter = createWalkingPadAdapter({
   connectionTimeoutMs: 30000,  // 30s for slow devices (default: 20s)
 });
 
@@ -198,13 +197,14 @@ const manager = createManager(adapter, {
 await manager.connect();
 ```
 
-#### WebBluetoothAdapterOptions
+#### AdapterOptions
+
+Adapter options are provided by [web-ble-kit](https://github.com/user/web-ble-kit). Common options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `storage` | `DeviceStorage` | localStorage | Storage for device ID persistence |
 | `connectionTimeoutMs` | `number` | 20000 | GATT connection timeout in ms |
-| `namePrefixes` | `readonly string[]` | `['Walking', 'KS']` | Device name prefixes for filtering |
 
 #### CreateManagerOptions
 
@@ -217,29 +217,29 @@ await manager.connect();
 
 ### 💾 Custom Device Storage
 
-Control how device IDs are persisted for reconnection:
+Control how device IDs are persisted for reconnection. Storage utilities are provided by [web-ble-kit](https://github.com/user/web-ble-kit):
 
 ```typescript
 import {
   createManager,
-  createWebBluetoothAdapter,
+  createWalkingPadAdapter,
   createSessionStorage,  // Persists for browser session only
   createMemoryStorage,   // Lost on page refresh
   createNoOpStorage,     // Disable persistence entirely
 } from 'walkingpad-js';
 
 // Use sessionStorage instead of localStorage
-const adapter = createWebBluetoothAdapter({
+const adapter = createWalkingPadAdapter({
   storage: createSessionStorage(),
 });
 
 // Or disable persistence entirely
-const adapterNoPersist = createWebBluetoothAdapter({
+const adapterNoPersist = createWalkingPadAdapter({
   storage: createNoOpStorage(),
 });
 
 // Or implement your own
-const adapterCustom = createWebBluetoothAdapter({
+const adapterCustom = createWalkingPadAdapter({
   storage: {
     get: () => mySecureStore.getDeviceId(),
     set: (id) => mySecureStore.setDeviceId(id),
@@ -257,24 +257,6 @@ interface DeviceStorage {
   remove(): void;
 }
 ```
-
-### 🏷️ Custom Device Name Prefixes
-
-Configure which Bluetooth device name prefixes are matched during device discovery and reconnection:
-
-```typescript
-import { createManager, createWebBluetoothAdapter } from 'walkingpad-js';
-
-// Only match devices starting with 'MyTreadmill'
-const adapter = createWebBluetoothAdapter({
-  namePrefixes: ['MyTreadmill', 'CustomPad'],
-});
-
-const manager = createManager(adapter);
-await manager.connect();
-```
-
-The default prefixes are `['Walking', 'KS']` which match standard WalkingPad and KingSmith devices.
 
 ### 📝 Custom Logging
 
@@ -309,7 +291,7 @@ interface Logger {
 Use isolated loggers for testing or multiple manager instances:
 
 ```typescript
-import { createManager, createWebBluetoothAdapter } from 'walkingpad-js';
+import { createManager, createWalkingPadAdapter } from 'walkingpad-js';
 
 const testLogger = {
   debug: vi.fn(),
@@ -317,7 +299,7 @@ const testLogger = {
   error: vi.fn(),
 };
 
-const manager = createManager(createWebBluetoothAdapter(), {
+const manager = createManager(createWalkingPadAdapter(), {
   logger: testLogger,
 });
 ```
@@ -326,10 +308,12 @@ const manager = createManager(createWebBluetoothAdapter(), {
 
 ## 🏗️ Architecture
 
+This library is built on top of [web-ble-kit](https://github.com/user/web-ble-kit), which handles all low-level Bluetooth operations.
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │              Application Layer                       │
-│         (Your app using WalkingPadBLE)              │
+│         (Your app using WalkingPadJS)              │
 └─────────────────────┬───────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────┐
@@ -349,15 +333,15 @@ const manager = createManager(createWebBluetoothAdapter(), {
                       │
 ┌─────────────────────▼───────────────────────────────┐
 │              Transport Layer                         │
-│    • Service/characteristic discovery               │
-│    • Notification handling                          │
-│    • Write operations with timeout                  │
+│    • WalkingPad-specific service discovery          │
+│    • Protocol detection                             │
 └─────────────────────┬───────────────────────────────┘
                       │
 ┌─────────────────────▼───────────────────────────────┐
-│               Adapter Layer                          │
-│    • Web Bluetooth API wrapper                      │
+│         web-ble-kit (External Library)               │
+│    • Web Bluetooth API abstraction                  │
 │    • Device selection & pairing                     │
+│    • Notification handling & write operations       │
 │    • Configurable storage & timeouts               │
 └─────────────────────────────────────────────────────┘
 ```

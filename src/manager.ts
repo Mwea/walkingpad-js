@@ -1,19 +1,22 @@
 import {
+  AbortError,
+  createEventEmitter,
+  createPollManager,
+  createStateMachine,
+  type PollManager,
+  raceWithAbort,
+  type StateMachine,
+  type TypedEventEmitter,
+  toEventTarget,
+} from 'web-ble-kit';
+import {
   BLE_NOTIFICATION_TIMEOUT_MS,
   BLE_WRITE_TIMEOUT_MS,
   MANAGER_POLL_INTERVAL_MS,
 } from './constants';
 import { NotConnectedError, normalizeError } from './errors';
-import {
-  createEventEmitter,
-  type TypedEventEmitter,
-  toEventTarget,
-  type WalkingPadEvents,
-} from './event-emitter';
 import { getLogger, type Logger } from './logger';
-import { createPollManager, type PollManager } from './poll-manager';
 import { detectProtocol, getProtocol } from './protocol-factory';
-import { createStateMachine, type StateMachine } from './state-machine';
 import * as transport from './transport';
 import type {
   BLEAdapter,
@@ -26,6 +29,18 @@ import type {
   WalkingPadProtocol,
   WalkingPadState,
 } from './types';
+
+/**
+ * Events emitted by the WalkingPad manager.
+ */
+export type WalkingPadEvents = {
+  state: WalkingPadState;
+  error: Error;
+  connectionStateChange: {
+    from: ConnectionState;
+    to: ConnectionState;
+  };
+};
 
 /**
  * Information about the current session.
@@ -195,7 +210,7 @@ export function createManager(
   const defaultPollIntervalMs =
     options.pollIntervalMs ?? MANAGER_POLL_INTERVAL_MS;
   const stateMachine: StateMachine = createStateMachine('disconnected');
-  const events = createEventEmitter<WalkingPadEvents>({ logger });
+  const events = createEventEmitter<WalkingPadEvents>();
 
   let session: TransportSession | null = null;
   let protocol: WalkingPadProtocol | null = null;
@@ -232,13 +247,25 @@ export function createManager(
     events.emit('state', state);
   }
 
-  // Create poll manager for standard protocol devices
-  const pollManager: PollManager = createPollManager({
-    defaultIntervalMs: defaultPollIntervalMs,
-    writeTimeoutMs,
-    logger,
-    onError: (e) => emitError(normalizeError(e)),
-  });
+  // Context type for the poll manager
+  interface PollContext {
+    session: TransportSession;
+    protocol: WalkingPadProtocol;
+  }
+
+  // Create poll manager using web-ble-kit
+  const pollManager: PollManager<PollContext> = createPollManager<PollContext>(
+    async (ctx: PollContext) => {
+      const cmd = ctx.protocol.cmdAskStats();
+      if (cmd.byteLength === 0) return;
+      await transport.write(ctx.session, cmd, writeTimeoutMs);
+    },
+    {
+      defaultIntervalMs: defaultPollIntervalMs,
+      maxConsecutiveErrors: 3,
+      onError: (e: Error) => emitError(normalizeError(e)),
+    },
+  );
 
   // Forward state machine transitions to event emitter
   stateMachine.onTransition((from, to) => {
@@ -371,9 +398,10 @@ export function createManager(
 
     // Start polling for standard protocol devices (FTMS uses notifications)
     if (currentProtocolName === 'standard') {
-      pollManager.start(session, currentProtocol, {
-        intervalMs: pollIntervalMs,
-      });
+      pollManager.start(
+        { session: s, protocol: currentProtocol },
+        { intervalMs: pollIntervalMs },
+      );
     }
     transitionState('connected');
   }
@@ -418,17 +446,8 @@ export function createManager(
   /**
    * Races a promise against an abort signal.
    * If the signal is aborted before the promise settles, rejects with ConnectionAbortedError.
-   *
-   * **Important:** This does NOT cancel the underlying BLE operation. The original promise
-   * continues running in the background even after abort. This means:
-   * - BLE writes/reads may still complete after abort
-   * - Resources allocated by the operation may need separate cleanup
-   * - State transitions after abort should be handled by the caller
-   *
-   * This is a fundamental limitation of the Web Bluetooth API which does not support
-   * cancellation of in-flight operations.
    */
-  function withAbortSignal<T>(
+  async function withAbortSignal<T>(
     promise: Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
@@ -436,43 +455,14 @@ export function createManager(
       return promise;
     }
 
-    if (signal.aborted) {
-      return Promise.reject(new ConnectionAbortedError());
+    try {
+      return await raceWithAbort(promise, signal);
+    } catch (err) {
+      if (err instanceof AbortError) {
+        throw new ConnectionAbortedError();
+      }
+      throw err;
     }
-
-    return new Promise<T>((resolve, reject) => {
-      let settled = false;
-
-      const cleanup = () => {
-        signal.removeEventListener('abort', abortHandler);
-      };
-
-      const abortHandler = () => {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          reject(new ConnectionAbortedError());
-        }
-      };
-
-      signal.addEventListener('abort', abortHandler);
-
-      promise
-        .then((value) => {
-          if (!settled) {
-            settled = true;
-            cleanup();
-            resolve(value);
-          }
-        })
-        .catch((error: unknown) => {
-          if (!settled) {
-            settled = true;
-            cleanup();
-            reject(error);
-          }
-        });
-    });
   }
 
   async function connect(options: ConnectOptions = {}): Promise<void> {
